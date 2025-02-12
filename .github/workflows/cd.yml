@@ -16,6 +16,8 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
+            cd ~/fastapi-book-project || git clone https://github.com/ChinonsoNwakudu/fastapi-book-project.git ~/fastapi-book-project
             cd ~/fastapi-book-project
             git pull origin main
-            docker compose up -d --build
+            docker-compose down
+            docker-compose up -d --build
