@@ -1,45 +1,47 @@
-name: Deploy
-
+name: CD Pipeline
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
-
+    branches: [main]
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to EC2
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.AWS_SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # Ensure Docker & Docker Compose are installed
-            sudo apt update
-            sudo apt install -y docker.io git
+            # Update package index and install dependencies
+            sudo apt-get update -y
+            sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
 
-            # Install Docker Compose if not already installed
-            if ! command -v docker-compose &> /dev/null
-            then
-                echo "Docker Compose not found, installing..."
-                sudo curl -L "https://github.com/docker/compose/releases/download/$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-                sudo chmod +x /usr/local/bin/docker-compose
-            fi
-            
-            # Navigate to project directory or clone if it doesn't exist
-            if [ ! -d "~/fastapi-book-project" ]; then
-              git clone https://github.com/ChinonsoNwakudu/fastapi-book-project.git ~/fastapi-book-project
-            fi
-            
-            cd ~/fastapi-book-project
-            git fetch origin main
-            git reset --hard origin/main
+            # Add Docker's official GPG key
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+            sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
-            # Restart the application
-            sudo docker-compose down
-            sudo docker-compose up -d --build
+            # Install Docker
+            sudo apt-get update -y
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 
-            # Check running containers
-            sudo docker ps -a
+            # Add the SSH user to the Docker group
+            sudo usermod -aG docker ${{ secrets.SSH_USERNAME }}
+
+            # Install Docker Compose
+            sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+
+            # Verify installations
+            docker --version
+            docker-compose --version
+
+            # Navigate to the project directory and deploy
+            cd /home/ubuntu/
+            git clone https://github.com/ChinonsoNwakudu/fastapi-book-project.git
+            cd fastapi-book-project/
+            git pull
+            docker-compose up -d --build
